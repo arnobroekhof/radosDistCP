@@ -38,8 +38,8 @@ public class CopyToRados extends Configured implements Tool {
         Configuration conf = this.getConf();
         conf.set("mapreduce.input.fileinputformat.split.maxsize", MAX_SPLIT_SIZE);
         conf.set("mapreduce.input.fileinputformat.split.minsize", MIN_SPLIT_SIZE);
-        // set task to timeout
 
+        // set task to timeout
         logger.info("Setting taks timeout to: {} ", TASK_TIMEOUT);
         conf.set("mapreduce.task.timeout", TASK_TIMEOUT);
 
