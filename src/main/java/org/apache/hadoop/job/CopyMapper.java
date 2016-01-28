@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
 public class CopyMapper extends Mapper<LongWritable, Text, LongWritable, Text> {
     private static final Logger logger = LoggerFactory.getLogger(CopyMapper.class);
 
-    private static final int BUFFER_SIZE = 1048576;
+    private static final int BUFFER_SIZE = 2097152;
     private FileSystem fileSystem;
     private RadosConnection radosConnection;
 
@@ -54,9 +54,11 @@ public class CopyMapper extends Mapper<LongWritable, Text, LongWritable, Text> {
                     radosConnection.putObject(inputStream, fileName, this.BUFFER_SIZE);
                 }
                 catch (Exception e) {
+                    context.getCounter(CopyCounter.FAILED).increment(1);
                     e.printStackTrace();
                 }
                 logger.info("Finished Copying file: {}", fileName);
+                context.getCounter(CopyCounter.FINISHED).increment(1);
                 logger.debug("Closing Hadoop inputstream");
                 inputStream.close();
             }

@@ -5,9 +5,9 @@ import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.job.CopyCounter;
 import org.apache.hadoop.job.CopyMapper;
 import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
@@ -22,6 +22,7 @@ public class CopyToRados extends Configured implements Tool {
     private static final Logger logger = LoggerFactory.getLogger(CopyToRados.class);
     private static final String MAX_SPLIT_SIZE = "3000";
     private static final String MIN_SPLIT_SIZE = "0";
+    private static final String TASK_TIMEOUT = "0";
 
     public static void main(String[] args) throws Exception {
 
@@ -35,8 +36,12 @@ public class CopyToRados extends Configured implements Tool {
         logger.info("Setup job");
         // When implementing tool
         Configuration conf = this.getConf();
-        conf.set("mapred.max.split.size", MAX_SPLIT_SIZE);
-        conf.set("mapred.min.split.size", MIN_SPLIT_SIZE);
+        conf.set("mapreduce.input.fileinputformat.split.maxsize", MAX_SPLIT_SIZE);
+        conf.set("mapreduce.input.fileinputformat.split.minsize", MIN_SPLIT_SIZE);
+        // set task to timeout
+
+        logger.info("Setting taks timeout to: {} ", TASK_TIMEOUT);
+        conf.set("mapreduce.task.timeout", TASK_TIMEOUT);
 
         // Create job
         Job job = Job.getInstance(conf);
@@ -54,7 +59,7 @@ public class CopyToRados extends Configured implements Tool {
         // Setup MapReduce job
         // Do not specify the number of Reducer
         job.setMapperClass(CopyMapper.class);
-        job.setReducerClass(Reducer.class);
+        job.setNumReduceTasks(0);
 
         // Specify key / value
         job.setOutputKeyClass(LongWritable.class);
@@ -65,8 +70,11 @@ public class CopyToRados extends Configured implements Tool {
         FileOutputFormat.setOutputPath(job, new Path(strings[1]));
         job.setOutputFormatClass(TextOutputFormat.class);
 
+        boolean result = job.waitForCompletion(true);
         // Execute job and return status
-        return job.waitForCompletion(true) ? 0 : 1;
+        logger.info("Finished copying files: {} success and {} failed",
+            job.getCounters().findCounter(CopyCounter.FINISHED).getValue(),
+            job.getCounters().findCounter(CopyCounter.FAILED).getValue());
+        return result ? 0 : 1;
     }
 }
-
