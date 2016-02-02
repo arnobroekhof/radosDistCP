@@ -1,16 +1,16 @@
 package org.apache.rados;
 
-import java.io.File;
-import java.io.InputStream;
-import java.security.MessageDigest;
-
+import com.ceph.rados.IoCTX;
+import com.ceph.rados.Rados;
+import com.ceph.rados.exceptions.RadosException;
+import com.ceph.rados.jna.RadosObjectInfo;
 import org.apache.commons.codec.binary.Hex;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.ceph.rados.IoCTX;
-import com.ceph.rados.Rados;
-import com.ceph.rados.exceptions.RadosException;
+import java.io.File;
+import java.io.InputStream;
+import java.security.MessageDigest;
 
 /**
  * Created by arno.broekhof on 1/6/16.
@@ -21,29 +21,25 @@ public class RadosConnection {
     private static Rados rados;
     private static IoCTX ioCTX;
 
-    private static String ENV_CONFIG_FILE = System.getenv("RADOS_JAVA_CONFIG_FILE");
-    private static String ENV_ID = System.getenv("RADOS_JAVA_ID");
-    private static String ENV_POOL = System.getenv("RADOS_JAVA_POOL");
 
-    private String CONFIG_FILE = ENV_CONFIG_FILE == null ? "/etc/ceph/ceph.conf" : ENV_CONFIG_FILE;
-    private String ID = ENV_ID == null ? "admin" : ENV_ID;
-    private String POOL = ENV_POOL == null ? "data" : ENV_POOL;
+    private String cephConfigFile;
+    private String cephId;
+    private String cephPool;
 
-    public RadosConnection(final String CONFIG_FILE, final String ID, final String POOL) {
+    public RadosConnection(final String cephConfigFile, final String cephId, final String cephPool) {
 
-        this.CONFIG_FILE = "/etc/ceph/ceph.conf";
-        logger.info("ceph config file set to {}", CONFIG_FILE);
+        this.cephConfigFile = cephConfigFile;
+        logger.info("ceph config file set to {}", cephConfigFile);
 
-        this.ID = "admin";
-        logger.info("ceph id set to {}", ID);
+        this.cephId = cephId;
+        logger.info("ceph id set to {}", cephId);
 
-        this.POOL = "primo";
-        logger.info("ceph pool set to {}", POOL);
+        this.cephPool = cephPool;
+        logger.info("ceph pool set to {}", cephPool);
 
         try {
             this.init();
-        }
-        catch (RadosException e) {
+        } catch (RadosException e) {
             throw new IllegalStateException(e.getMessage());
         }
     }
@@ -61,10 +57,10 @@ public class RadosConnection {
      * Initialize connection
      */
     public void init() throws RadosException {
-        rados = new Rados(ID);
-        rados.confReadFile(new File(CONFIG_FILE));
+        rados = new Rados(cephId);
+        rados.confReadFile(new File(cephConfigFile));
         rados.connect();
-        ioCTX = rados.ioCtxCreate(POOL);
+        ioCTX = rados.ioCtxCreate(cephPool);
         logger.info("Connected to Ceph cluster: {} ", rados.clusterFsid());
     }
 
@@ -93,5 +89,62 @@ public class RadosConnection {
         }
         byte[] digest = md.digest();
         ioCTX.setExtentedAttribute(objectName, "MD5", new String(Hex.encodeHex(digest)));
+    }
+
+    /**
+     * Validate the object based on name and size.
+     *
+     * @param objectName
+     * @param objectSize
+     * @return true if the object is present and the given size matches the given objectSize.
+     */
+    public boolean validate(final String objectName, final long objectSize) {
+        boolean _return = false;
+        if (this.exists(objectName).getSize() == objectSize) {
+            _return = true;
+        }
+        return _return;
+    }
+
+    /**
+     * Validate object based on name and md5sum.
+     * NOTE: this function assumes that there is an extended attribute called MD5.
+     *
+     * @param objectName
+     * @param md5
+     * @return true if the object is present and the md5 sum matches the given md5.
+     */
+    public boolean validate(final String objectName, final String md5) {
+        boolean _return = false;
+        if (this.exists(objectName).getOid().equals(objectName)) {
+            try {
+                if (ioCTX.getExtentedAttribute(objectName, "MD5").equals(md5)) {
+                    _return = true;
+                }
+            } catch (RadosException e) {
+                logger.error(e.getMessage());
+            }
+        }
+        return _return;
+    }
+
+    /**
+     * Check if an object with the givven objectName is present.
+     *
+     * @param objectName
+     * @return if the object name is present and equals the given objectName then it
+     * return the RadosObjectInfo.
+     */
+    private RadosObjectInfo exists(final String objectName) {
+        RadosObjectInfo radosObjectInfo = null;
+        try {
+            radosObjectInfo = ioCTX.stat(objectName);
+            if (radosObjectInfo.getOid().equals(objectName)) {
+                return radosObjectInfo;
+            }
+        } catch (RadosException e) {
+            logger.error(e.getMessage());
+        }
+        return radosObjectInfo;
     }
 }
