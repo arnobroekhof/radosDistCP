@@ -88,7 +88,7 @@
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
-                                        <Main-Class>org.apache.hadoop.CopyToRados</Main-Class>
+                                        <Main-Class>org.apache.hadoop.ValidateRados</Main-Class>
                                         <Build-Number>${project.version}</Build-Number>
                                     </manifestEntries>
                                 </transformer>
