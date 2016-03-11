@@ -28,13 +28,13 @@ public class RadosConnection {
 
     public RadosConnection(final String cephConfigFile, final String cephId, final String cephPool) {
 
-        this.cephConfigFile = "/etc/ceph/ceph.conf";
+        this.cephConfigFile = cephConfigFile;
         logger.info("ceph config file set to {}", cephConfigFile);
 
-        this.cephId = "admin";
+        this.cephId = cephId;
         logger.info("ceph id set to {}", cephId);
 
-        this.cephPool = "primo";
+        this.cephPool = cephPool;
         logger.info("ceph pool set to {}", cephPool);
 
         try {

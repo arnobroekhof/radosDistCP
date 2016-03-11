@@ -12,6 +12,7 @@
         <hadoop.version>2.7.1</hadoop.version>
         <rados.version>0.2.0</rados.version>
         <jna.version>4.1.0</jna.version>
+        <common-cli.version>1.3.1</common-cli.version>
     </properties>
 
     <dependencies>

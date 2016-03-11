@@ -17,7 +17,8 @@ import org.slf4j.LoggerFactory;
 public class CopyMapper extends Mapper<LongWritable, Text, LongWritable, Text> {
     private static final Logger logger = LoggerFactory.getLogger(CopyMapper.class);
 
-    private static final int BUFFER_SIZE = 2097152;
+    private static final int DEFAULT_BUFFER_SIZE = 2097152;
+    private String bufferSize;
     private FileSystem fileSystem;
     private RadosConnection radosConnection;
 
@@ -26,8 +27,17 @@ public class CopyMapper extends Mapper<LongWritable, Text, LongWritable, Text> {
         super.setup(context);
 
         Configuration conf = context.getConfiguration();
+        String cephConfigFile = conf.get("ceph.conf.file");
+        String cephId = conf.get("ceph.id");
+        String cephPool = conf.get("ceph.pool");
+        bufferSize = conf.get("buffer.size", Integer.toString(DEFAULT_BUFFER_SIZE));
 
-        radosConnection = new RadosConnection(conf.get("ceph.config.file"), conf.get("ceph.id"), conf.get("ceph.pool"));
+        logger.info("Using buffer size: {}", bufferSize );
+        logger.info("Mapper using ceph config file: {}", cephConfigFile);
+        logger.info("Mapper using ceph id: {}", cephId);
+        logger.info("Mapper using ceph pool: {}", cephPool);
+
+        radosConnection = new RadosConnection(cephConfigFile, cephId, cephPool);
         fileSystem = FileSystem.get(context.getConfiguration());
     }
 
@@ -51,7 +61,7 @@ public class CopyMapper extends Mapper<LongWritable, Text, LongWritable, Text> {
                 FSDataInputStream inputStream = new FSDataInputStream(fileSystem.open(status.getPath()));
 
                 try {
-                    radosConnection.putObject(inputStream, fileName, this.BUFFER_SIZE);
+                    radosConnection.putObject(inputStream, fileName, Integer.parseInt(bufferSize));
                 }
                 catch (Exception e) {
                     context.getCounter(CopyCounter.FAILED).increment(1);

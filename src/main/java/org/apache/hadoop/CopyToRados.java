@@ -1,10 +1,5 @@
 package org.apache.hadoop;
 
-import java.io.IOException;
-import java.util.ArrayDeque;
-import java.util.Queue;
-import java.util.UUID;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -25,6 +20,13 @@ import org.apache.hadoop.util.ToolRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.util.ArrayDeque;
+import java.util.Queue;
+import java.util.UUID;
+
 public class CopyToRados extends Configured implements Tool {
 
     private static final Logger logger = LoggerFactory.getLogger(CopyToRados.class);
@@ -39,7 +41,7 @@ public class CopyToRados extends Configured implements Tool {
     }
 
     @Override
-    public int run(final String[] strings) throws Exception {
+    public int run(final String[] args) throws Exception {
 
         logger.info("Setup job");
         // When implementing tool
@@ -51,17 +53,29 @@ public class CopyToRados extends Configured implements Tool {
         logger.info("Setting taks timeout to: {} ", TASK_TIMEOUT);
         conf.set("mapreduce.task.timeout", TASK_TIMEOUT);
 
+        if (conf.get("ceph.conf.file").isEmpty()) {
+            conf.set("ceph.conf.file", "/etc/ceph/ceph.conf");
+        }
+
+        if (conf.get("ceph.id").isEmpty()) {
+            conf.set("ceph.id", "admin");
+        }
+        if (conf.get("ceph.pool").isEmpty()) {
+            conf.set("ceph.pool", "data");
+        }
+
         // Create job
         Job job = Job.getInstance(conf);
         job.setJarByClass(CopyToRados.class);
 
-        conf.set("ceph.config.file", "/etc/ceph/ceph.conf");
-        conf.set("ceph.id", "admin");
-        conf.set("ceph.pool", "hdfs-backup");
+        String inputList = "/tmp/" + UUID.randomUUID();
+        logger.info("Input list = {}", inputList);
+
 
         // Input
-        logger.info("Input path is: {}", strings[0]);
-        Path inputFileList = createInputList(strings[0], FileSystem.get(conf));
+        logger.info("Input path is: {}", args[0]);
+        createInputList(inputList, args[0], FileSystem.get(conf));
+        Path inputFileList = new Path(inputList);
         FileInputFormat.addInputPath(job, inputFileList);
         job.setInputFormatClass(TextInputFormat.class);
 
@@ -73,10 +87,10 @@ public class CopyToRados extends Configured implements Tool {
         // Specify key / value
         job.setOutputKeyClass(LongWritable.class);
         job.setOutputValueClass(Text.class);
-
+        String outputFile = "/tmp/" + UUID.randomUUID();
         // Output
-        logger.info("Output file is: {}", strings[1]);
-        FileOutputFormat.setOutputPath(job, new Path(strings[1]));
+        logger.info("Output file is: {}", outputFile);
+        FileOutputFormat.setOutputPath(job, new Path(outputFile));
         job.setOutputFormatClass(TextOutputFormat.class);
 
         boolean result = job.waitForCompletion(true);
@@ -90,14 +104,15 @@ public class CopyToRados extends Configured implements Tool {
         return result ? 0 : 1;
     }
 
-    public Path createInputList(final String path, final FileSystem fileSystem) throws IOException {
 
-        String inputList = "/tmp/" + UUID.randomUUID();
+    public void createInputList(final String inputList, final String path, final FileSystem fileSystem) throws IOException {
+
         Path inputListPath = new Path(inputList);
         if (fileSystem.exists(inputListPath)) {
             fileSystem.delete(inputListPath, true);
         }
         FSDataOutputStream fsDataOutputStream = fileSystem.create(inputListPath);
+        BufferedWriter bufferedWriter = new BufferedWriter(new OutputStreamWriter(fsDataOutputStream));
         Path hdfsPath = new Path(path);
         Queue pathsToVisit = new ArrayDeque();
         pathsToVisit.add(hdfsPath);
@@ -110,11 +125,11 @@ public class CopyToRados extends Configured implements Tool {
                 }
 
                 if (status.isFile()) {
-                    fsDataOutputStream.writeUTF(status.getPath().toString());
+                    bufferedWriter.write(status.getPath().toString() + "\n");
                 }
             }
         }
+        bufferedWriter.close();
         fsDataOutputStream.close();
-        return new Path(inputList);
     }
 }
