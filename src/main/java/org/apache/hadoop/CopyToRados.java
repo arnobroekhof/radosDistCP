@@ -1,7 +1,15 @@
 package org.apache.hadoop;
 
+import java.io.IOException;
+import java.util.ArrayDeque;
+import java.util.Queue;
+import java.util.UUID;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
@@ -49,11 +57,12 @@ public class CopyToRados extends Configured implements Tool {
 
         conf.set("ceph.config.file", "/etc/ceph/ceph.conf");
         conf.set("ceph.id", "admin");
-        conf.set("ceph.pool", "data");
+        conf.set("ceph.pool", "hdfs-backup");
 
         // Input
-        logger.info("Input file is: {}", strings[0]);
-        FileInputFormat.addInputPath(job, new Path(strings[0]));
+        logger.info("Input path is: {}", strings[0]);
+        Path inputFileList = createInputList(strings[0], FileSystem.get(conf));
+        FileInputFormat.addInputPath(job, inputFileList);
         job.setInputFormatClass(TextInputFormat.class);
 
         // Setup MapReduce job
@@ -75,6 +84,37 @@ public class CopyToRados extends Configured implements Tool {
         logger.info("Finished copying files: {} success and {} failed",
             job.getCounters().findCounter(CopyCounter.FINISHED).getValue(),
             job.getCounters().findCounter(CopyCounter.FAILED).getValue());
+
+        FileSystem.get(conf).delete(inputFileList, true);
+
         return result ? 0 : 1;
+    }
+
+    public Path createInputList(final String path, final FileSystem fileSystem) throws IOException {
+
+        String inputList = "/tmp/" + UUID.randomUUID();
+        Path inputListPath = new Path(inputList);
+        if (fileSystem.exists(inputListPath)) {
+            fileSystem.delete(inputListPath, true);
+        }
+        FSDataOutputStream fsDataOutputStream = fileSystem.create(inputListPath);
+        Path hdfsPath = new Path(path);
+        Queue pathsToVisit = new ArrayDeque();
+        pathsToVisit.add(hdfsPath);
+        while (pathsToVisit.size() > 0) {
+            Path curPath = (Path) pathsToVisit.remove();
+            FileStatus[] statuses = fileSystem.listStatus(curPath);
+            for (FileStatus status : statuses) {
+                if (status.isDirectory()) {
+                    pathsToVisit.add(status.getPath());
+                }
+
+                if (status.isFile()) {
+                    fsDataOutputStream.writeUTF(status.getPath().toString());
+                }
+            }
+        }
+        fsDataOutputStream.close();
+        return new Path(inputList);
     }
 }
